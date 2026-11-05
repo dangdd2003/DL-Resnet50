@@ -1,0 +1,36 @@
+# ResNet-50 from scratch on Birds 525 species.
+# Expected layout: data/100-bird-species/{train,valid,test}/<SPECIES>/*.jpg
+data:
+  data_dir: data/100-bird-species
+  train_split: train
+  val_split: valid
+  test_split: test
+  image_size: [224, 224]
+  batch_size: 128
+  seed: 42
+  cache: false
+  augmentation:
+    horizontal_flip: true
+    rotation_degrees: 10
+    translation: 0.05
+    zoom: 0.05
+    contrast: 0.0
+model:
+  arch: resnet50
+  zero_init_residual: true
+  stride_in_3x3: false
+  dropout: 0.0
+train:
+  epochs: 40
+  optimizer: sgd
+  learning_rate: 0.1
+  momentum: 0.9
+  nesterov: true
+  weight_decay: 5.0e-5
+  schedule: cosine
+  warmup_epochs: 3
+  early_stopping_patience: 8
+  mixed_precision: true
+  distribute: true
+  output_dir: runs
+  run_name: birds_scratch

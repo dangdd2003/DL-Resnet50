@@ -112,11 +112,16 @@ def _set_path(d: dict[str, Any], dotted: str, raw: str) -> None:
     keys = dotted.split(".")
     node = d
     for k in keys[:-1]:
-        node = node.setdefault(k, {})
+        if not isinstance(node.get(k), dict):  # e.g. "augmentation: null" in the YAML
+            node[k] = {}
+        node = node[k]
     node[keys[-1]] = yaml.safe_load(raw)
 
 
 def validate(cfg: ExperimentConfig) -> ExperimentConfig:
+    """Check value ranges / combinations; raises ``ValueError`` on invalid configs."""
+    if isinstance(cfg.model.weights, str) and cfg.model.weights.lower() in ("", "none", "null"):
+        cfg.model.weights = None  # "--set model.weights=None" parses as the string "None"
     if cfg.model.arch not in ("resnet50", "resnet50_transfer"):
         raise ValueError(f"model.arch must be resnet50|resnet50_transfer, got {cfg.model.arch!r}")
     if cfg.train.optimizer not in ("sgd", "adam", "adamw"):
@@ -125,6 +130,16 @@ def validate(cfg: ExperimentConfig) -> ExperimentConfig:
         raise ValueError(f"train.schedule must be step|cosine|constant, got {cfg.train.schedule!r}")
     if cfg.train.epochs < 1 or cfg.data.batch_size < 1:
         raise ValueError("train.epochs and data.batch_size must be >= 1")
+    if len(cfg.data.image_size) != 2 or min(cfg.data.image_size) < 1:
+        raise ValueError(f"data.image_size must be [height, width] >= 1, got {cfg.data.image_size}")
+    if cfg.train.learning_rate <= 0 or cfg.train.fine_tune_learning_rate <= 0:
+        raise ValueError("train.learning_rate and train.fine_tune_learning_rate must be > 0")
+    if cfg.train.drop_every_epochs < 1 or not 0.0 < cfg.train.drop_factor <= 1.0:
+        raise ValueError("train.drop_every_epochs must be >= 1 and train.drop_factor in (0, 1]")
+    if cfg.train.warmup_epochs < 0 or cfg.train.fine_tune_epochs < 0:
+        raise ValueError("train.warmup_epochs and train.fine_tune_epochs must be >= 0")
+    if cfg.train.fine_tune_layers < 0 or cfg.train.weight_decay < 0:
+        raise ValueError("train.fine_tune_layers and train.weight_decay must be >= 0")
     if not 0.0 <= cfg.model.dropout < 1.0:
         raise ValueError("model.dropout must be in [0, 1)")
     if cfg.train.fine_tune_epochs and cfg.model.arch != "resnet50_transfer":
@@ -132,7 +147,9 @@ def validate(cfg: ExperimentConfig) -> ExperimentConfig:
     return cfg
 
 
-def load_config(path: str | Path | None = None, overrides: list[str] | None = None) -> ExperimentConfig:
+def load_config(
+    path: str | Path | None = None, overrides: list[str] | None = None
+) -> ExperimentConfig:
     """Load YAML (optional) and apply ``section.key=value`` overrides (values parsed as YAML)."""
     raw: dict[str, Any] = {}
     if path is not None:

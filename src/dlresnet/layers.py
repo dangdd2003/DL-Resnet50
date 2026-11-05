@@ -44,8 +44,8 @@ class CaffePreprocess(keras.layers.Layer):
 class BottleneckBlock(keras.layers.Layer):
     """ResNet v1 bottleneck block (He et al., 2016, arXiv:1512.03385).
 
-    ``conv1x1(filters) -> BN -> ReLU -> conv3x3(filters) -> BN -> ReLU -> conv1x1(4*filters) -> BN``,
-    then ``+ shortcut`` and a single ReLU *after* the addition (the notebooks applied a ReLU before
+    ``conv1x1(f) -> BN -> ReLU -> conv3x3(f) -> BN -> ReLU -> conv1x1(4f) -> BN``, then
+    ``+ shortcut`` and a single ReLU *after* the addition (the notebooks applied a ReLU before
     the add, which turns the residual branch into a non-negative-only correction).
 
     Args:
