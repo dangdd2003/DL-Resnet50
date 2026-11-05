@@ -23,7 +23,8 @@ model:
 train:
   epochs: 40
   optimizer: sgd
-  learning_rate: 0.1
+  # Linear scaling rule (Goyal et al., 2017, arXiv:1706.02677): 0.1 x batch_size / 256.
+  learning_rate: 0.05
   momentum: 0.9
   nesterov: true
   weight_decay: 5.0e-5

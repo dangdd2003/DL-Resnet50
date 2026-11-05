@@ -15,6 +15,10 @@ from keras import ops
 
 from dlresnet.config import TrainConfig
 
+# Variables whose names match these regexes skip weight decay ("no bias decay"):
+# BatchNorm gamma/beta and biases. He et al., 2019, "Bag of Tricks", arXiv:1812.01187.
+NO_DECAY_VAR_NAMES: tuple[str, ...] = ("gamma", "beta", "bias")
+
 
 def _warmup(step: Any, base_lr: float, warmup_steps: int) -> Any:
     return base_lr * (step + 1.0) / float(max(warmup_steps, 1))
@@ -124,16 +128,28 @@ def build_lr_schedule(
 
 
 def build_optimizer(cfg: TrainConfig, learning_rate: Any) -> keras.optimizers.Optimizer:
-    """Optimizer selected by ``cfg.optimizer``; always uses ``learning_rate=`` (never ``lr=``)."""
+    """Optimizer selected by ``cfg.optimizer``; always uses ``learning_rate=`` (never ``lr=``).
+
+    If the optimizer applies weight decay (SGD with ``weight_decay > 0``, or AdamW), BatchNorm
+    gamma/beta and biases are excluded from it ("no bias decay", see ``NO_DECAY_VAR_NAMES``).
+    """
+    opt: keras.optimizers.Optimizer
+    decays = False
     if cfg.optimizer == "sgd":
-        return keras.optimizers.SGD(
+        opt = keras.optimizers.SGD(
             learning_rate=learning_rate,
             momentum=cfg.momentum,
             nesterov=cfg.nesterov,
             weight_decay=cfg.weight_decay if cfg.weight_decay > 0 else None,
         )
-    if cfg.optimizer == "adam":
-        return keras.optimizers.Adam(learning_rate=learning_rate)
-    if cfg.optimizer == "adamw":
-        return keras.optimizers.AdamW(learning_rate=learning_rate, weight_decay=cfg.weight_decay)
-    raise ValueError(f"Unknown optimizer {cfg.optimizer!r}")
+        decays = cfg.weight_decay > 0
+    elif cfg.optimizer == "adam":
+        opt = keras.optimizers.Adam(learning_rate=learning_rate)
+    elif cfg.optimizer == "adamw":
+        opt = keras.optimizers.AdamW(learning_rate=learning_rate, weight_decay=cfg.weight_decay)
+        decays = True
+    else:
+        raise ValueError(f"Unknown optimizer {cfg.optimizer!r}")
+    if decays:
+        opt.exclude_from_weight_decay(var_names=list(NO_DECAY_VAR_NAMES))
+    return opt
