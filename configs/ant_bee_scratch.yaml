@@ -1,0 +1,37 @@
+# ResNet-50 trained from scratch on the Hymenoptera (ants vs bees) dataset.
+# Expected layout: data/hymenoptera/{train,val}/{ants,bees}/*.jpg
+data:
+  data_dir: data/hymenoptera
+  train_split: train
+  val_split: val
+  test_split: null
+  image_size: [224, 224]
+  batch_size: 16
+  seed: 42
+  cache: false
+  augmentation:
+    horizontal_flip: true
+    rotation_degrees: 20
+    translation: 0.2
+    zoom: 0.0
+    contrast: 0.0
+model:
+  arch: resnet50
+  zero_init_residual: true
+  stride_in_3x3: false
+  dropout: 0.0
+train:
+  epochs: 25
+  optimizer: sgd
+  learning_rate: 0.01
+  momentum: 0.9
+  nesterov: false
+  weight_decay: 1.0e-4
+  schedule: step
+  drop_every_epochs: 7
+  drop_factor: 0.1
+  warmup_epochs: 2
+  mixed_precision: false
+  distribute: false
+  output_dir: runs
+  run_name: ant_bee_scratch
