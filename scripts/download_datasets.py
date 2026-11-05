@@ -159,6 +159,41 @@ def verify_layout(root: Path, splits: Sequence[str]) -> dict[str, tuple[int, int
     return summary
 
 
+def reconcile_class_names(root: Path, splits: Sequence[str]) -> list[tuple[str, str, str]]:
+    """Rename class folders whose names differ from the reference split only in whitespace.
+
+    Some published copies of the Birds-525 dataset spell one species folder with extra
+    spaces in one split (e.g. ``"PARAKETT  AUKLET"``) and with single spaces in another.
+    ``verify_layout`` requires identical class names across splits, so this renames such a
+    folder to the reference spelling. ``splits[0]`` is the reference. A folder is renamed
+    only when exactly one reference name has the same whitespace-normalised form, and the
+    target name is not already present in that split. Anything else is left untouched for
+    ``verify_layout`` to report.
+
+    Returns the renames performed as ``(split, old_name, new_name)`` tuples.
+    """
+    reference_split = splits[0]
+    reference_names = {child.name for child in _subdirs(root / reference_split)}
+    renames: list[tuple[str, str, str]] = []
+    for split in splits[1:]:
+        split_dir = root / split
+        for child in _subdirs(split_dir):
+            if child.name in reference_names:
+                continue
+            normalized = " ".join(child.name.split())
+            candidates = [
+                name for name in reference_names if " ".join(name.split()) == normalized
+            ]
+            if len(candidates) != 1:
+                continue
+            target = split_dir / candidates[0]
+            if target.exists():
+                continue
+            child.rename(target)
+            renames.append((split, child.name, candidates[0]))
+    return renames
+
+
 def copy_splits(src_root: Path, dest: Path, splits: Sequence[str]) -> None:
     """Copy only the required split folders from ``src_root`` into ``dest``."""
     dest.mkdir(parents=True, exist_ok=True)
@@ -187,6 +222,8 @@ def process_dataset(name: str, data_dir: Path, force: bool) -> dict[str, tuple[i
         if dest.exists():
             shutil.rmtree(dest)
         copy_splits(split_root, dest, spec.splits)
+    for split, old, new in reconcile_class_names(dest, spec.splits):
+        print(f"[{name}] renamed {split}/{old!r} -> {new!r} to match the train split")
     summary = verify_layout(dest, spec.splits)
     print(format_summary(name, dest, summary))
     return summary

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -47,6 +48,20 @@ def _compile(model: keras.Model, optimizer: keras.optimizers.Optimizer, num_clas
     )
 
 
+def _resolve_precision_policy(requested: bool) -> str:
+    """Return the Keras dtype policy name, falling back to float32 when no GPU is visible."""
+    if not requested:
+        return "float32"
+    if tf.config.list_physical_devices("GPU"):
+        return "mixed_float16"
+    warnings.warn(
+        "train.mixed_precision=true but no GPU is visible; training in float32 instead.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+    return "float32"
+
+
 def _merge(history: dict[str, list[float]], new: dict[str, list[Any]]) -> None:
     for key, values in new.items():
         history.setdefault(key, []).extend(float(v) for v in values)
@@ -64,9 +79,7 @@ def train(cfg: ExperimentConfig) -> TrainResult:
     run_dir.mkdir(parents=True, exist_ok=True)
     cfg.save(run_dir / "config.yaml")
     keras.utils.set_random_seed(cfg.data.seed)
-    keras.mixed_precision.set_global_policy(
-        "mixed_float16" if cfg.train.mixed_precision else "float32"
-    )
+    keras.mixed_precision.set_global_policy(_resolve_precision_policy(cfg.train.mixed_precision))
     strategy = (
         tf.distribute.MirroredStrategy() if cfg.train.distribute else tf.distribute.get_strategy()
     )
